@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Plant Dashboard</title>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+
+    <style>
+        /* CSS Variables - Dark Blue/Black Theme */
+        :root {
+            --bg-color: #121212; /* Very dark background */
+            --card-color: #1F232B; /* Slightly lighter card background */
+            --border-color: #333333; /* Darker border */
+            --text-primary: #E0E0E0; /* Light gray text */
+            --text-secondary: #B0B0B0; /* Muted gray text */
+            --header-color: #FFFFFF; /* White for main header */
+
+            /* Vibrant Colors */
+            --vibrant-green: #22C55E; /* Good */
+            --vibrant-red: #EF4444;   /* Low / Bad */
+            --vibrant-yellow: #FACC15; /* Warning / Fair */
+            --vibrant-blue: #3B82F6;  /* Neutral / Optimal Blue */
+
+            /* Chart colors */
+            --chart-temp-color: #FACC15;
+            --chart-humidity-color: #3B82F6;
+            --chart-moisture-color: #22C55E;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            padding: 2rem;
+            min-height: 100vh;
+            /* This ensures the button is centered globally */
+            display: flex;
+            flex-direction: column;
+            align-items: center; 
+        }
+
+        header {
+            width: 100%;
+            max-width: 1200px;
+            margin-bottom: 2.5rem;
+            padding: 0 1rem; /* Add padding for mobile */
+            
+            /* UPDATED: Flexbox rules for clock/status */
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap; /* Allow stacking on mobile */
+            gap: 0.5rem;
+        }
+
+        header h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: var(--header-color);
+            letter-spacing: -0.025em;
+            margin: 0; /* Remove default margin */
+        }
+
+        /* NEW: Styles for Clock and Status */
+        .header-info {
+            text-align: right;
+            min-width: 150px;
+        }
+
+        #realtime-clock {
+            font-size: 1.25rem;
+            font-weight: 500;
+            color: var(--text-primary);
+        }
+
+        #connection-status {
+            font-size: 0.8rem;
+            font-weight: 500;
+            text-transform: uppercase;
+            /* Color will be set by JS */
+        }
+
+        /* UPDATED: This is the final, correct responsive rule */
+        .dashboard-container {
+            display: grid;
+            /* This allows 3 cards on landscape (e.g., 720px) 
+               and 1 card on portrait (e.g., 360px) */
+            grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+            gap: 2rem;
+            width: 100%;
+            max-width: 1200px;
+        }
+
+        .dashboard-card {
+            background-color: var(--card-color);
+            border-radius: 12px;
+            padding: 1.75rem;
+            border: 1px solid var(--border-color);
+            transition: all 0.3s ease;
+            display: flex;
+            flex-direction: column;
+            min-height: 400px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .dashboard-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.25);
+        }
+
+        .card-header {
+            margin-bottom: 1.5rem;
+        }
+
+        .card-header h3 {
+            font-size: 1.6rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 0.25rem;
+        }
+
+        .card-header p {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+
+        .alert-color {
+            color: var(--vibrant-red) !important;
+            animation: pulse 1.5s infinite;
+        }
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.6; }
+            100% { opacity: 1; }
+        }
+
+        .nav-link {
+            display: block;
+            margin-left: auto;
+            margin-right: auto;
+            margin-top: 1.5rem;
+            padding: 0.8rem 1.5rem;
+            background-color: var(--vibrant-blue);
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 600;
+            transition: background-color 0.3s ease;
+        }
+
+        .nav-link:hover {
+            background-color: #2563EB;
+        }
+
+        /* UPDATED: Mobile centering rules */
+        @media (max-width: 767px) {
+            body {
+                padding: 1rem;
+            }
+            
+            header {
+                justify-content: center; /* Center flex items */
+            }
+
+            header h1 {
+                flex-basis: 100%; /* Make h1 take full width */
+                text-align: center; /* Explicitly center text */
+                font-size: 1.8rem;
+            }
+
+            .header-info {
+                flex-basis: 100%; /* Make info take full width */
+                text-align: center; /* Explicitly center text */
+            }
+            
+            .dashboard-card {
+                padding: 1.25rem;
+                min-height: 350px;
+            }
+            .card-header h3 {
+                font-size: 1.3rem;
+            }
+            
+            .nav-link {
+                text-align: center;
+                width: 90%; /* Make it wide but not full-width */
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>My Plant Dashboard</h1>
+        <div class="header-info">
+            <div id="realtime-clock">--:-- --</div>
+            <div id="connection-status">...</div>
+        </div>
+    </header>
+
+    <div class="dashboard-container">
+
+        <div class="dashboard-card">
+            <div class="card-header">
+                <h3>Temperature</h3>
+                <p>Current Reading & 24h History</p>
+            </div>
+            <div id="temp-gauge-container" style="flex-grow: 1; min-height: 150px; display: flex; align-items: center; justify-content: center;">
+                <div id="temp-gauge" style="width: 100%; max-width: 250px;"></div>
+            </div>
+            <div id="temp-chart" style="min-height: 100px;"></div>
+        </div>
+
+        <div class="dashboard-card">
+            <div class="card-header">
+                <h3>Humidity</h3>
+                <p>Current Reading & 24h History</p>
+            </div>
+            <div id="humidity-gauge-container" style="flex-grow: 1; min-height: 150px; display: flex; align-items: center; justify-content: center;">
+                <div id="humidity-gauge" style="width: 100%; max-width: 250px;"></div>
+            </div>
+            <div id="humidity-chart" style="min-height: 100px;"></div>
+        </div>
+        
+        <div class="dashboard-card">
+            <div class="card-header">
+                <h3>Soil Moisture</h3>
+                <p>Current Reading & 24h History</p>
+            </div>
+            <div id="moisture-gauge-container" style="flex-grow: 1; min-height: 150px; display: flex; align-items: center; justify-content: center;">
+                <div id="moisture-gauge" style="width: 100%; max-width: 250px;"></div>
+            </div>
+            <div id="moisture-chart" style="min-height: 100px;"></div>
+        </div>
+
+    </div>
+
+    <a href="analytics.html" class="nav-link">View Detailed Analytics</a>
+
+    <script type="module">
+        // Import Firebase functions
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-database.js";
+
+        // --- 1. YOUR FIREBASE CONFIGURATION ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyDci_KmZqZhX1-4TYe1eElbhulAeJZJ7a4",
+            authDomain: "plant-6e094.firebaseapp.com",
+            databaseURL: "https://plant-6e094-default-rtdb.firebaseio.com",
+            projectId: "plant-6e094",
+            storageBucket: "plant-6e094.firebasestorage.app",
+            messagingSenderId: "449303879856",
+            appId: "1:449303879856:web:c1d1f66fcb3e14f3dc9b75",
+            measurementId: "G-3M6FL9QBX7"
+        };
+        
+        // --- 2. Initialize Firebase and set data path ---
+        try {
+            const app = initializeApp(firebaseConfig);
+            const database = getDatabase(app);
+            // !! This path must match your data structure in Firebase
+            // E.g., 'plant/sensors' or 'plantData' or just '/'
+            const dataRef = ref(database, '/'); // Using root '/' - CHANGE IF NEEDED
+            
+            document.addEventListener("DOMContentLoaded", () => {
+                const globalChartOptions = {
+                    chart: {
+                        foreColor: 'var(--text-secondary)',
+                        toolbar: { show: false },
+                        animations: {
+                            enabled: true,
+                            easing: 'easeinout',
+                            speed: 800,
+                            animateGradually: { enabled: true, delay: 150 },
+                            dynamicAnimation: { enabled: true, speed: 350 }
+                        }
+                    },
+                    tooltip: { theme: 'dark' },
+                };
+
+                // --- Clock and Status Elements ---
+                const clockElement = document.getElementById('realtime-clock');
+                const statusElement = document.getElementById('connection-status');
+
+                function updateTime() {
+                    const now = new Date();
+                    let hours = now.getHours();
+                    const minutes = now.getMinutes().toString().padStart(2, '0');
+                    const seconds = now.getSeconds().toString().padStart(2, '0');
+                    const ampm = hours >= 12 ? 'PM' : 'AM';
+                    hours = hours % 12;
+                    hours = hours ? hours : 12;
+                    clockElement.textContent = `${hours}:${minutes}:${seconds} ${ampm}`;
+                }
+
+                updateTime();
+                setInterval(updateTime, 1000);
+                
+                // --- GAUGE CREATION FUNCTION ---
+                const createGauge = (elementId, unit = '%') => {
+                    const options = {
+                        ...globalChartOptions,
+                        series: [0], 
+                        chart: { ...globalChartOptions.chart, type: 'radialBar', height: 250, parentHeightOffset: 0 },
+                        plotOptions: {
+                            radialBar: {
+                                startAngle: -135, endAngle: 135,
+                                hollow: { margin: 0, size: '70%', background: 'transparent' },
+                                track: { background: 'var(--border-color)', strokeWidth: '97%', margin: 5 },
+                                dataLabels: {
+                                    show: true,
+                                    name: { show: true, fontSize: '1rem', fontWeight: 500, color: 'var(--text-secondary)', offsetY: -10, formatter: () => '...' },
+                                    value: { show: true, fontSize: '2.5rem', fontWeight: 700, color: 'var(--text-primary)', offsetY: 10, formatter: (val) => `${Math.round(val)}${unit}` }
+                                }
+                            }
+                        },
+                        fill: { colors: ['var(--vibrant-blue)'] },
+                        stroke: { lineCap: 'round', curve: 'smooth' },
+                        labels: [''],
+                    };
+                    const gauge = new ApexCharts(document.querySelector(`#${elementId}`), options);
+                    gauge.render();
+                    return gauge;
+                };
+
+                // --- LINE CHART CREATION FUNCTION (Mini charts) ---
+                const createMiniLineChart = (elementId, color) => {
+                    const options = {
+                        ...globalChartOptions,
+                        series: [{ data: [] }],
+                        chart: { ...globalChartOptions.chart, type: 'area', height: 100, sparkline: { enabled: true } },
+                        dataLabels: { enabled: false },
+                        stroke: { curve: 'smooth', width: 3 },
+                        fill: { type: 'gradient', gradient: { shadeIntensity: 1, opacityFrom: 0.7, opacityTo: 0.1, stops: [0, 90, 100] } },
+                        colors: [color],
+                        xaxis: { type: 'datetime' },
+                        tooltip: { ...globalChartOptions.tooltip, x: { format: 'HH:mm' }, y: { title: { formatter: () => '' }, formatter: (val) => `${Math.round(val)}` } },
+                        grid: { show: false },
+                    };
+                    const chart = new ApexCharts(document.querySelector(`#${elementId}`), options);
+                    chart.render();
+                    return chart;
+                };
+
+                // Initialize all gauges and charts
+                const tempGauge = createGauge('temp-gauge', '°F');
+                const humidityGauge = createGauge('humidity-gauge', '%');
+                const moistureGauge = createGauge('moisture-gauge', '%');
+
+                const tempChart = createMiniLineChart('temp-chart', 'var(--chart-temp-color)');
+                const humidityChart = createMiniLineChart('humidity-chart', 'var(--chart-humidity-color)');
+                const moistureChart = createMiniLineChart('moisture-chart', 'var(--chart-moisture-color)');
+                
+                // Master dashboard update function
+                function updateDashboard(data) {
+                    // !! Assumes your data structure is:
+                    // {
+                    //   "current": { "temp": 72, "humidity": 50, "moisture": 60 },
+                    //   "history": { 
+                    //      "temp": [[timestamp1, val1], ...],
+                    //      "humidity": [[timestamp1, val1], ...],
+                    //      "moisture": [[timestamp1, val1], ...]
+                    //   }
+                    // }
+                    if (data && data.current && data.history) {
+                        updateGaugeAndChart(tempGauge, tempChart, data.current.temp, data.history.temp, 'temp');
+                        updateGaugeAndChart(humidityGauge, humidityChart, data.current.humidity, data.history.humidity, 'humidity');
+                        updateGaugeAndChart(moistureGauge, moistureChart, data.current.moisture, data.history.moisture, 'moisture');
+                    } else {
+                        console.log("Waiting for data structure (current, history)...");
+                    }
+                }
+
+                // Helper to update gauge and its associated mini chart
+                function updateGaugeAndChart(gauge, chart, currentValue, historyData, type) {
+                    let statusLabel = 'GOOD';
+                    let color = 'var(--vibrant-green)';
+                    let seriesValue = parseFloat(currentValue);
+
+                    if (type === 'temp') {
+                        if (seriesValue < 65) { statusLabel = 'LOW'; color = 'var(--vibrant-blue)'; }
+                        else if (seriesValue > 85) { statusLabel = 'HIGH'; color = 'var(--vibrant-red)'; }
+                        else { statusLabel = 'OPTIMAL'; color = 'var(--vibrant-green)'; }
+                    } else { 
+                        if (seriesValue < 40) { statusLabel = 'LOW'; color = 'var(--vibrant-red)'; }
+                        else if (seriesValue < 60) { statusLabel = 'FAIR'; color = 'var(--vibrant-yellow)'; }
+                        else { statusLabel = 'GOOD'; color = 'var(--vibrant-green)'; }
+                    }
+
+                    gauge.updateOptions({
+                        series: [seriesValue],
+                        fill: { colors: [color] },
+                        plotOptions: { radialBar: { dataLabels: { name: { formatter: () => statusLabel } } } }
+                    });
+                    
+                    if (historyData) {
+                        chart.updateSeries([{ data: historyData }]);
+                    }
+                }
+                
+                // --- 3. LIVE FIREBASE LISTENER ---
+                onValue(dataRef, (snapshot) => {
+                    const data = snapshot.val();
+                    if (data) {
+                        if (statusElement) {
+                            statusElement.textContent = "Firebase Connected";
+                            statusElement.style.color = "var(--vibrant-green)";
+                        }
+                        updateDashboard(data);
+                    } else {
+                        if (statusElement) {
+                            statusElement.textContent = "Firebase: No Data";
+                            statusElement.style.color = "var(--vibrant-yellow)";
+                        }
+                        console.log("No data available from Firebase.");
+                    }
+                }, (error) => {
+                    if (statusElement) {
+                        statusElement.textContent = "Firebase Error";
+                        statusElement.style.color = "var(--vibrant-red)";
+                    }
+                    console.error("Firebase Read Failed:", error);
+                });
+
+            }); // End DOMContentLoaded
+        
+        } catch (e) {
+            // Handle Firebase init error (e.g., bad config)
+            console.error("Firebase Initialization Error:", e);
+            const statusElement = document.getElementById('connection-status');
+            if (statusElement) {
+                statusElement.textContent = "Config Error";
+                statusElement.style.color = "var(--vibrant-red)";
+            }
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Detailed Analytics</title>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+<script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+
+    <style>
+        /* CSS Variables - Identical to index.html for consistency */
+        :root {
+            --bg-color: #121212;
+            --card-color: #1F232B;
+            --border-color: #333333;
+            --text-primary: #E0E0E0;
+            --text-secondary: #B0B0B0;
+            --header-color: #FFFFFF;
+            --vibrant-green: #22C55E;
+            --vibrant-red: #EF4444;
+            --vibrant-yellow: #FACC15;
+            --vibrant-blue: #3B82F6;
+            --chart-temp-color: #FACC15;
+            --chart-humidity-color: #3B82F6;
+            --chart-moisture-color: #22C55E;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            padding: 2rem;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        header {
+            width: 100%;
+            max-width: 1200px;
+            margin-bottom: 2.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        header h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: var(--header-color);
+            letter-spacing: -0.025em;
+        }
+
+        .back-link {
+            display: inline-block;
+            padding: 0.8rem 1.5rem;
+            background-color: var(--vibrant-blue);
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 600;
+            transition: background-color 0.3s ease;
+        }
+
+        .back-link:hover {
+            background-color: #2563EB;
+        }
+
+        .analytics-grid {
+            display: grid;
+            grid-template-columns: 1fr; /* Single column for detailed charts */
+            gap: 2rem;
+            width: 100%;
+            max-width: 1200px;
+        }
+
+        .chart-card {
+            background-color: var(--card-color);
+            border-radius: 12px;
+            padding: 1.75rem;
+            border: 1px solid var(--border-color);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+        }
+        .chart-card:hover {
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.25);
+        }
+
+        .chart-card h3 {
+            font-size: 1.6rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 1.5rem;
+        }
+        
+        .analytics-chart-container {
+            width: 100%;
+            min-height: 400px; /* Taller charts for analytics */
+        }
+        
+        @media (max-width: 768px) {
+            body {
+                padding: 1rem;
+            }
+            header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 1rem;
+            }
+            header h1 {
+                font-size: 1.8rem;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>Detailed Analytics</h1>
+        <a href="index.html" class="back-link">&larr; Back to Dashboard</a>
+    </header>
+
+    <main class="analytics-grid">
+
+        <div class="chart-card">
+            <h3>Temperature History (°F)</h3>
+            <div id="temp-chart-full" class="analytics-chart-container"></div>
+        </div>
+
+        <div class="chart-card">
+            <h3>Humidity History (%)</h3>
+            <div id="humidity-chart-full" class="analytics-chart-container"></div>
+        </div>
+
+        <div class="chart-card">
+            <h3>Soil Moisture History (%)</h3>
+            <div id="moisture-chart-full" class="analytics-chart-container"></div>
+        </div>
+
+    </main>
+
+    <script type="module">
+        // Import Firebase functions
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-database.js";
+
+        // --- 1. YOUR FIREBASE CONFIGURATION ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyDci_KmZqZhX1-4TYe1eElbhulAeJZJ7a4",
+            authDomain: "plant-6e094.firebaseapp.com",
+            databaseURL: "https://plant-6e094-default-rtdb.firebaseio.com",
+            projectId: "plant-6e094",
+            storageBucket: "plant-6e094.firebasestorage.app",
+            messagingSenderId: "449303879856",
+            appId: "1:449303879856:web:c1d1f66fcb3e14f3dc9b75",
+            measurementId: "G-3M6FL9QBX7"
+        };
+        
+        // --- 2. Initialize Firebase and set data path ---
+        try {
+            const app = initializeApp(firebaseConfig);
+            const database = getDatabase(app);
+            // !! This path must match your data structure in Firebase
+            const dataRef = ref(database, '/'); // Using root '/' - CHANGE IF NEEDED
+            
+            document.addEventListener("DOMContentLoaded", () => {
+                const globalChartOptions = {
+                    chart: {
+                        foreColor: 'var(--text-secondary)',
+                        toolbar: {
+                            show: true,
+                            tools: { download: true, selection: true, zoom: true, zoomin: true, zoomout: true, pan: true, reset: true }
+                        },
+                        animations: { enabled: true, easing: 'easeinout', speed: 800, },
+                        zoom: { enabled: true, type: 'x', autoScaleYaxis: true },
+                    },
+                    tooltip: { theme: 'dark' },
+                };
+
+                // --- ANALYTICS CHART CREATION FUNCTION ---
+                const createAnalyticsChart = (elementId, title, color, unit) => {
+                    const options = {
+                        ...globalChartOptions,
+                        series: [{ name: title, data: [] }],
+                        chart: { ...globalChartOptions.chart, type: 'area', height: 400 },
+                        dataLabels: { enabled: false },
+                        stroke: { curve: 'smooth', width: 3 },
+                        fill: { type: 'gradient', gradient: { shadeIntensity: 1, opacityFrom: 0.7, opacityTo: 0.1, stops: [0, 90, 100] } },
+                        colors: [color],
+                        xaxis: {
+                            type: 'datetime',
+                            labels: { format: 'MMM dd - HH:mm', style: { colors: 'var(--text-secondary)' } },
+                            axisBorder: { color: 'var(--border-color)' },
+                            axisTicks: { color: 'var(--border-color)' }
+                        },
+                        yaxis: {
+                            title: { text: title, style: { color: 'var(--text-secondary)', fontWeight: 500 } },
+                            labels: { formatter: (val) => `${Math.round(val)}${unit}`, style: { colors: 'var(--text-secondary)' } }
+                        },
+                        tooltip: { ...globalChartOptions.tooltip, x: { format: 'dd MMM yyyy - HH:mm' }, y: { formatter: (val) => `${val.toFixed(1)}${unit}` } },
+                        grid: { show: true, borderColor: 'var(--border-color)', strokeDashArray: 4 },
+                    };
+                    const chart = new ApexCharts(document.querySelector(`#${elementId}`), options);
+                    chart.render();
+                    return chart;
+                };
+
+                // Initialize all charts
+                // Initialize all charts
+const tempChart = createAnalyticsChart('temp-chart-full', 'Temperature', 'var(--chart-temp-color)', '°F');
+const humidityChart = createAnalyticsChart('humidity-chart-full', 'Humidity', 'var(--chart-humidity-color)', '%');
+const moistureChart = createAnalyticsChart('moisture-chart-full', 'Moisture', 'var(--chart-moisture-color)', '%');
+
+                // Master analytics update function
+                function updateAnalytics(data) {
+                    if (data && data.history) {
+                        tempChart.updateSeries([{ data: data.history.temp }]);
+                        humidityChart.updateSeries([{ data: data.history.humidity }]);
+                        moistureChart.updateSeries([{ data: data.history.moisture }]);
+                    }
+                }
+                
+                // --- 3. LIVE FIREBASE LISTENER ---
+                onValue(dataRef, (snapshot) => {
+                    const data = snapshot.val();
+                    if (data && data.history) {
+                        updateAnalytics(data); // This page only needs history
+                    } else {
+                        console.log("No historical data available from Firebase.");
+                    }
+                }, (error) => {
+                    console.error("Firebase Read Failed:", error);
+                });
+            });
+            
+        } catch (e) {
+            console.error("Firebase Initialization Error:", e);
+        }
+    </script>
+</body>
+</html>
