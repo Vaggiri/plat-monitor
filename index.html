@@ -12,20 +12,16 @@
     <style>
         /* CSS Variables - Dark Blue/Black Theme */
         :root {
-            --bg-color: #121212; /* Very dark background */
-            --card-color: #1F232B; /* Slightly lighter card background */
-            --border-color: #333333; /* Darker border */
-            --text-primary: #E0E0E0; /* Light gray text */
-            --text-secondary: #B0B0B0; /* Muted gray text */
-            --header-color: #FFFFFF; /* White for main header */
-
-            /* Vibrant Colors */
-            --vibrant-green: #22C55E; /* Good */
-            --vibrant-red: #EF4444;   /* Low / Bad */
-            --vibrant-yellow: #FACC15; /* Warning / Fair */
-            --vibrant-blue: #3B82F6;  /* Neutral / Optimal Blue */
-
-            /* Chart colors */
+            --bg-color: #121212;
+            --card-color: #1F232B;
+            --border-color: #333333;
+            --text-primary: #E0E0E0;
+            --text-secondary: #B0B0B0;
+            --header-color: #FFFFFF;
+            --vibrant-green: #22C55E;
+            --vibrant-red: #EF4444;
+            --vibrant-yellow: #FACC15;
+            --vibrant-blue: #3B82F6;
             --chart-temp-color: #FACC15;
             --chart-humidity-color: #3B82F6;
             --chart-moisture-color: #22C55E;
@@ -43,7 +39,6 @@
             color: var(--text-primary);
             padding: 2rem;
             min-height: 100vh;
-            /* This ensures the button is centered globally */
             display: flex;
             flex-direction: column;
             align-items: center; 
@@ -53,14 +48,12 @@
             width: 100%;
             max-width: 1200px;
             margin-bottom: 2.5rem;
-            padding: 0 1rem; /* Add padding for mobile */
-            
-            /* UPDATED: Flexbox rules for clock/status */
+            padding: 0 1rem;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            flex-wrap: wrap; /* Allow stacking on mobile */
-            gap: 0.5rem;
+            flex-wrap: wrap;
+            gap: 1.5rem; /* Added gap for better wrapping */
         }
 
         header h1 {
@@ -68,13 +61,22 @@
             font-weight: 700;
             color: var(--header-color);
             letter-spacing: -0.025em;
-            margin: 0; /* Remove default margin */
+            margin: 0;
         }
 
-        /* NEW: Styles for Clock and Status */
+        /* UPDATED: Header Info Group */
         .header-info {
+            display: flex;
+            align-items: center;
+            gap: 1.5rem; /* Space between button and clock */
+            flex-wrap: wrap; /* Allow wrapping */
+            justify-content: flex-end; /* Align to the right */
+        }
+
+        /* NEW: Group for clock/status */
+        .clock-status-group {
             text-align: right;
-            min-width: 150px;
+            min-width: 150px; /* Give it space */
         }
 
         #realtime-clock {
@@ -87,16 +89,12 @@
             font-size: 0.8rem;
             font-weight: 500;
             text-transform: uppercase;
-            /* Color will be set by JS */
         }
 
-        /* UPDATED: This is the final, correct responsive rule */
         .dashboard-container {
             display: grid;
-            /* This allows 3 cards on landscape (e.g., 720px) 
-               and 1 card on portrait (e.g., 360px) */
-            grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
-            gap: 2rem;
+            grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+            gap: 1.5rem;
             width: 100%;
             max-width: 1200px;
         }
@@ -144,18 +142,17 @@
             100% { opacity: 1; }
         }
 
+        /* UPDATED: Button Style */
         .nav-link {
-            display: block;
-            margin-left: auto;
-            margin-right: auto;
-            margin-top: 1.5rem;
-            padding: 0.8rem 1.5rem;
+            /* Removed margin rules */
+            padding: 0.6rem 1.2rem; /* Smaller padding */
             background-color: var(--vibrant-blue);
             color: white;
             text-decoration: none;
             border-radius: 8px;
             font-weight: 600;
             transition: background-color 0.3s ease;
+            white-space: nowrap; /* Prevent button text from wrapping */
         }
 
         .nav-link:hover {
@@ -173,14 +170,23 @@
             }
 
             header h1 {
-                flex-basis: 100%; /* Make h1 take full width */
-                text-align: center; /* Explicitly center text */
+                flex-basis: 100%;
+                text-align: center;
                 font-size: 1.8rem;
             }
 
+            /* UPDATED: Header info stacks vertically and centers */
             .header-info {
-                flex-basis: 100%; /* Make info take full width */
-                text-align: center; /* Explicitly center text */
+                flex-basis: 100%;
+                flex-direction: column;
+                align-items: center;
+                gap: 1rem;
+                justify-content: center;
+            }
+
+            /* NEW: Center clock text on mobile */
+            .clock-status-group {
+                text-align: center;
             }
             
             .dashboard-card {
@@ -191,9 +197,12 @@
                 font-size: 1.3rem;
             }
             
+            /* UPDATED: Mobile button style */
             .nav-link {
                 text-align: center;
-                width: 90%; /* Make it wide but not full-width */
+                padding: 0.7rem;
+                font-size: 0.9rem;
+                width: 90%; /* Make it wide on mobile */
             }
         }
     </style>
@@ -203,8 +212,11 @@
     <header>
         <h1>My Plant Dashboard</h1>
         <div class="header-info">
-            <div id="realtime-clock">--:-- --</div>
-            <div id="connection-status">...</div>
+            <a href="analytics.html" class="nav-link">View Detailed Analytics</a>
+            <div class="clock-status-group">
+                <div id="realtime-clock">--:-- --</div>
+                <div id="connection-status">...</div>
+            </div>
         </div>
     </header>
 
@@ -245,8 +257,6 @@
 
     </div>
 
-    <a href="analytics.html" class="nav-link">View Detailed Analytics</a>
-
     <script type="module">
         // Import Firebase functions
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
@@ -268,8 +278,6 @@
         try {
             const app = initializeApp(firebaseConfig);
             const database = getDatabase(app);
-            // !! This path must match your data structure in Firebase
-            // E.g., 'plant/sensors' or 'plantData' or just '/'
             const dataRef = ref(database, '/'); // Using root '/' - CHANGE IF NEEDED
             
             document.addEventListener("DOMContentLoaded", () => {
@@ -363,15 +371,6 @@
                 
                 // Master dashboard update function
                 function updateDashboard(data) {
-                    // !! Assumes your data structure is:
-                    // {
-                    //   "current": { "temp": 72, "humidity": 50, "moisture": 60 },
-                    //   "history": { 
-                    //      "temp": [[timestamp1, val1], ...],
-                    //      "humidity": [[timestamp1, val1], ...],
-                    //      "moisture": [[timestamp1, val1], ...]
-                    //   }
-                    // }
                     if (data && data.current && data.history) {
                         updateGaugeAndChart(tempGauge, tempChart, data.current.temp, data.history.temp, 'temp');
                         updateGaugeAndChart(humidityGauge, humidityChart, data.current.humidity, data.history.humidity, 'humidity');
