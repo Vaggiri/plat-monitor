@@ -1,121 +1,169 @@
-// ----------------------------------------------------------------
+// ---------------------------------------------------------------- //
 //  ESP32 Plant Monitor to Firebase Realtime Database
 //  Reads Temp, Humidity, and Moisture
-//  Logs to /current and manages /history array
-// ----------------------------------------------------------------
+//  Logs to /current and manages /history (each reading stored as /history/<sensor>/<timestamp>)
+// ---------------------------------------------------------------- //
 
-// --- 1. Include Libraries ---
 #include <WiFi.h>
-#include <time.h>                 // For NTP time
-#include <Firebase_ESP_Client.h>  // ✅ new library
-#include "DHT.h"
+#include <time.h>                 
+#include "Firebase_ESP_Client.h"  
+#include "addons/TokenHelper.h"   
+#include "addons/RTDBHelper.h"    
+#include <DHT.h>                  
 
-// --- 2. WiFi & Firebase Setup ---
+// --- User Configuration ---
+// Wi-Fi Credentials
 #define WIFI_SSID "giri"
 #define WIFI_PASSWORD "11223344"
+
+// Firebase Config
 #define API_KEY "AIzaSyDci_KmZqZhX1-4TYe1eElbhulAeJZJ7a4"
-#define DATABASE_URL "https://your-database-url.firebaseio.com/" // change this
+#define DATABASE_URL "https://plant-6e094-default-rtdb.firebaseio.com"
+#define DATABASE_SECRET "he5qGAK4IQJbm7sRj3Lr9Xn88o6BeQd8VY1bmMpO"
 
-// --- 3. DHT & Moisture Sensor Pins ---
-#define DHTPIN 4
-#define DHTTYPE DHT11
-#define MOISTURE_PIN 34
+// Sensor Pins
+#define DHT_PIN 14       
+#define DHT_TYPE DHT22
+#define MOISTURE_PIN 34  // Analog input
 
-// --- 4. Global Objects ---
-DHT dht(DHTPIN, DHTTYPE);
+// LED Pins (Alert LEDs)
+#define LED_TEMP 25      
+#define LED_HUMID 26     
+#define LED_MOIST 27     
+
+// Thresholds
+#define TEMP_THRESHOLD_F 90.0     
+#define HUMID_THRESHOLD 80.0      
+#define MOISTURE_LOW_THRESHOLD 30 
+
+// Logging settings
+const long LOG_INTERVAL_MS = 5000; // log every 5 sec
+const int MAX_HISTORY_POINTS = 50; 
+
+// --- Global ---
 FirebaseData fbdo;
 FirebaseAuth auth;
 FirebaseConfig config;
+DHT dht(DHT_PIN, DHT_TYPE);
+unsigned long lastLogTime = 0;
 
-// --- 5. Function Declarations ---
-unsigned long long getTimestamp();
-void updateHistoryArray(String param, unsigned long long ts, float value);
-void logSensorData();
+// --- Helpers ---
+unsigned long long getTimestamp() {
+  time_t now = time(nullptr);
+  if (now <= 0) {
+    return (unsigned long long)(millis() / 1000ULL);
+  }
+  return (unsigned long long)now;
+}
 
-// --- 6. Setup ---
+void updateHistoryArray(const char* key, unsigned long long ts, float value) {
+  String path = "/history/";
+  path += key;
+  path += "/";
+  path += String(ts);
+
+  FirebaseJson data;
+  data.set("ts", ts);
+  data.set("value", value);
+
+  if (!Firebase.RTDB.setJSON(&fbdo, path.c_str(), &data)) {
+    Serial.printf("Failed to write history %s : %s\n", path.c_str(), fbdo.errorReason().c_str());
+  }
+}
+
+// --- Setup ---
 void setup() {
   Serial.begin(115200);
-  dht.begin();
+  Serial.println("\n[Plant Monitor] Booting...");
 
+  // Connect WiFi
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
   Serial.print("Connecting to WiFi");
-  while (WiFi.status() != WL_CONNECTED) {
+  while (WiFi.status() != WL_CONNECTED) { delay(500); Serial.print("."); }
+  Serial.println("\nWiFi connected!");
+
+  // Init LEDs
+  pinMode(LED_TEMP, OUTPUT);
+  pinMode(LED_HUMID, OUTPUT);
+  pinMode(LED_MOIST, OUTPUT);
+  digitalWrite(LED_TEMP, LOW);
+  digitalWrite(LED_HUMID, LOW);
+  digitalWrite(LED_MOIST, LOW);
+
+  // Init DHT22 with internal pull-up
+  pinMode(DHT_PIN, INPUT_PULLUP);
+  dht.begin();
+  delay(3000); // wait for DHT to stabilize
+
+  // Init Time + Firebase
+  configTime(0, 0, "pool.ntp.org", "time.nist.gov");
+  Serial.print("Waiting for time sync");
+  unsigned long start = millis();
+  while (time(nullptr) < 1600000000UL && millis() - start < 10000) {
     delay(500);
     Serial.print(".");
   }
-  Serial.println("\n✅ Connected to WiFi!");
+  Serial.println();
 
-  // Configure time for IST (GMT+5:30)
-  configTime(19800, 0, "pool.ntp.org", "time.nist.gov");
-  Serial.println("⏰ Time synced via NTP");
-
-  // Firebase setup
+  // Firebase config using legacy token
   config.api_key = API_KEY;
   config.database_url = DATABASE_URL;
-
-  // Optional: anonymous sign-in
-  if (Firebase.signUp(&config, &auth, "", "")) {
-    Serial.println("✅ Firebase sign-up success");
-  } else {
-    Serial.printf("❌ Firebase sign-up failed: %s\n", config.signer.signupError.message.c_str());
-  }
-
+  config.signer.tokens.legacy_token = DATABASE_SECRET; 
   Firebase.begin(&config, &auth);
   Firebase.reconnectWiFi(true);
 
-  Serial.println("🔥 Firebase connected!");
+  Serial.println("Setup complete.");
 }
 
-// --- 7. Main Loop ---
+// --- Loop ---
 void loop() {
-  logSensorData();
-  delay(5000); // log every 5 seconds
-}
-
-// --- 8. Function Definitions ---
-
-// 🕒 Get real-time timestamp from NTP
-unsigned long long getTimestamp() {
-  time_t now;
-  time(&now);
-  return static_cast<unsigned long long>(now);
-}
-
-// 📜 Update history array in Firebase
-void updateHistoryArray(String param, unsigned long long ts, float value) {
-  String path = "/history/" + param + "/" + String(ts);
-  if (Firebase.RTDB.setFloat(&fbdo, path.c_str(), value)) {
-    Serial.println("✅ " + param + " logged to history");
-  } else {
-    Serial.println("❌ Failed to log " + param);
-    Serial.println(fbdo.errorReason());
+  if (millis() - lastLogTime > LOG_INTERVAL_MS) {
+    lastLogTime = millis();
+    if (Firebase.ready()) {
+      logSensorData();
+    } else {
+      Serial.println("Firebase not ready yet.");
+      logSensorData(); // optional: still print local readings
+    }
   }
 }
 
-// 🌿 Log current sensor readings
+// --- Sensor + LED Logic ---
 void logSensorData() {
-  float t = dht.readTemperature();
   float h = dht.readHumidity();
-  int moistureValue = analogRead(MOISTURE_PIN);
-  float moisturePercent = map(moistureValue, 4095, 0, 0, 100);
+  float t_f = dht.readTemperature(true);
+  int m_raw = analogRead(MOISTURE_PIN);
+  const int MOISTURE_MIN_RAW = 1000;
+  const int MOISTURE_MAX_RAW = 4095;
+  int m_percent = constrain(map(m_raw, MOISTURE_MAX_RAW, MOISTURE_MIN_RAW, 0, 100), 0, 100);
 
-  if (isnan(t) || isnan(h)) {
-    Serial.println("⚠️ Failed to read from DHT sensor!");
+  if (isnan(h) || isnan(t_f)) {
+    Serial.println("DHT read failed!");
     return;
   }
 
   unsigned long long ts = getTimestamp();
 
-  // Log current values
-  Firebase.RTDB.setFloat(&fbdo, "/current/temp", t);
-  Firebase.RTDB.setFloat(&fbdo, "/current/humidity", h);
-  Firebase.RTDB.setFloat(&fbdo, "/current/moisture", moisturePercent);
-  Firebase.RTDB.setInt(&fbdo, "/current/timestamp", ts);
+  Serial.printf("Temp: %.1f°F | Humidity: %.1f%% | Moisture: %d%% | ts: %llu\n", t_f, h, m_percent, ts);
 
-  // Log history
-  updateHistoryArray("temp", ts, t);
+  // LED alerts
+  digitalWrite(LED_TEMP, (t_f > TEMP_THRESHOLD_F) ? HIGH : LOW);
+  digitalWrite(LED_HUMID, (h > HUMID_THRESHOLD) ? HIGH : LOW);
+  digitalWrite(LED_MOIST, (m_percent < MOISTURE_LOW_THRESHOLD) ? HIGH : LOW);
+
+  // Firebase /current
+  FirebaseJson currentData;
+  currentData.set("temp", t_f);
+  currentData.set("humidity", h);
+  currentData.set("moisture", m_percent);
+  currentData.set("ts", ts);
+
+  if (!Firebase.RTDB.setJSON(&fbdo, "/current", &currentData)) {
+    Serial.printf("Failed to set /current : %s\n", fbdo.errorReason().c_str());
+  }
+
+  // Update history
+  updateHistoryArray("temp", ts, t_f);
   updateHistoryArray("humidity", ts, h);
-  updateHistoryArray("moisture", ts, moisturePercent);
-
-  Serial.println("🌡️ Temp: " + String(t) + "°C | 💧 Humidity: " + String(h) + "% | 🌱 Moisture: " + String(moisturePercent) + "%");
+  updateHistoryArray("moisture", ts, m_percent);
 }
