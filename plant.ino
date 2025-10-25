@@ -1,7 +1,8 @@
 // ---------------------------------------------------------------- //
-//  ESP32 Plant Monitor to Firebase Realtime Database
-//  Reads Temp, Humidity, and Moisture
-//  Logs to /current and manages /history (each reading stored as /history/<sensor>/<timestamp>)
+//  ESP32 Plant Monitor to Firebase (CORRECTED VERSION)
+//  - Logs /current
+//  - Manages /history as an ARRAY (for web app)
+//  - Trims history to MAX_HISTORY_POINTS
 // ---------------------------------------------------------------- //
 
 #include <WiFi.h>
@@ -22,8 +23,8 @@
 #define DATABASE_SECRET "he5qGAK4IQJbm7sRj3Lr9Xn88o6BeQd8VY1bmMpO"
 
 // Sensor Pins
-#define DHT_PIN 14       
-#define DHT_TYPE DHT22
+#define DHT_PIN 32      
+#define DHT_TYPE DHT11
 #define MOISTURE_PIN 34  // Analog input
 
 // LED Pins (Alert LEDs)
@@ -38,7 +39,7 @@
 
 // Logging settings
 const long LOG_INTERVAL_MS = 5000; // log every 5 sec
-const int MAX_HISTORY_POINTS = 50; 
+const int MAX_HISTORY_POINTS = 50; // Max points to keep in history array
 
 // --- Global ---
 FirebaseData fbdo;
@@ -47,26 +48,53 @@ FirebaseConfig config;
 DHT dht(DHT_PIN, DHT_TYPE);
 unsigned long lastLogTime = 0;
 
-// --- Helpers ---
+// --- Helper: Get Timestamp ---
+// ** FIXED: Returns milliseconds, which JavaScript needs **
 unsigned long long getTimestamp() {
   time_t now = time(nullptr);
-  if (now <= 0) {
-    return (unsigned long long)(millis() / 1000ULL);
-  }
-  return (unsigned long long)now;
+  // Return as milliseconds (which JavaScript Date() objects use)
+  return (unsigned long long)now * 1000ULL;
 }
 
+
+// --- Helper: Update History Array ---
+// ** FIXED: This function now manages an array [ts, val] and trims it **
+// --- Helper: Update History Array ---
+// ** FIXED: This function now uses the correct library syntax **
 void updateHistoryArray(const char* key, unsigned long long ts, float value) {
   String path = "/history/";
   path += key;
-  path += "/";
-  path += String(ts);
+  FirebaseJsonArray historyArray;
 
-  FirebaseJson data;
-  data.set("ts", ts);
-  data.set("value", value);
+  Serial.printf("Updating history for %s... ", key);
 
-  if (!Firebase.RTDB.setJSON(&fbdo, path.c_str(), &data)) {
+  // 1. Get the current history array from Firebase
+  if (Firebase.RTDB.getJSON(&fbdo, path.c_str())) {
+    // **FIX 1: Assign the returned array to your variable**
+    historyArray = fbdo.jsonArray(); // Parse the existing array
+  } else {
+    Serial.print(" (No existing data, creating new array) ");
+    // If it fails (e.g., first time), we just use the empty historyArray object
+  }
+
+  // 2. Create the new data point as an array: [timestamp, value]
+  FirebaseJsonArray newPoint;
+  newPoint.add(ts);
+  newPoint.add(value);
+
+  // 3. Add the new point to the end of the main array
+  historyArray.add(newPoint);
+
+  // 4. **CRITICAL:** Trim the array if it's too long
+  while (historyArray.size() > MAX_HISTORY_POINTS) {
+    historyArray.remove(0); // Remove the oldest data point (from the front)
+  }
+
+  // 5. Write the modified array back to Firebase
+  // **FIX 2: Use setArray for a FirebaseJsonArray**
+  if (Firebase.RTDB.setArray(&fbdo, path.c_str(), &historyArray)) {
+    Serial.println("OK");
+  } else {
     Serial.printf("Failed to write history %s : %s\n", path.c_str(), fbdo.errorReason().c_str());
   }
 }
@@ -123,7 +151,7 @@ void loop() {
       logSensorData();
     } else {
       Serial.println("Firebase not ready yet.");
-      logSensorData(); // optional: still print local readings
+      // Don't log if Firebase isn't ready, it will fail
     }
   }
 }
@@ -142,6 +170,7 @@ void logSensorData() {
     return;
   }
 
+  // ** FIXED: ts is now in milliseconds **
   unsigned long long ts = getTimestamp();
 
   Serial.printf("Temp: %.1f°F | Humidity: %.1f%% | Moisture: %d%% | ts: %llu\n", t_f, h, m_percent, ts);
@@ -156,13 +185,13 @@ void logSensorData() {
   currentData.set("temp", t_f);
   currentData.set("humidity", h);
   currentData.set("moisture", m_percent);
-  currentData.set("ts", ts);
+  currentData.set("ts", ts); // This timestamp is just for reference
 
   if (!Firebase.RTDB.setJSON(&fbdo, "/current", &currentData)) {
     Serial.printf("Failed to set /current : %s\n", fbdo.errorReason().c_str());
   }
 
-  // Update history
+  // Update history (This now uses the new, correct function)
   updateHistoryArray("temp", ts, t_f);
   updateHistoryArray("humidity", ts, h);
   updateHistoryArray("moisture", ts, m_percent);
