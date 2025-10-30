@@ -227,8 +227,10 @@
                 <h3>Temperature</h3>
                 <p>Current Reading & 24h History</p>
             </div>
-            <div id="temp-gauge-container" style="flex-grow: 1; min-height: 150px; display: flex; align-items: center; justify-content: center;">
+            <div id="temp-gauge-container" style="flex-grow: 1; min-height: 150px; display: flex; align-items: center; justify-content: center; flex-direction: column;">
                 <div id="temp-gauge" style="width: 100%; max-width: 250px;"></div>
+                <!-- New element to show both Fahrenheit and Celsius -->
+                <div id="temp-units" style="margin-top: 8px; color: var(--text-secondary); font-weight: 600;">--°F / --°C</div>
             </div>
             <div id="temp-chart" style="min-height: 100px;"></div>
         </div>
@@ -386,10 +388,24 @@
                     let color = 'var(--vibrant-green)';
                     let seriesValue = parseFloat(currentValue);
 
+                    if (isNaN(seriesValue)) {
+                        seriesValue = 0;
+                    }
+
                     if (type === 'temp') {
                         if (seriesValue < 65) { statusLabel = 'LOW'; color = 'var(--vibrant-blue)'; }
                         else if (seriesValue > 85) { statusLabel = 'HIGH'; color = 'var(--vibrant-red)'; }
                         else { statusLabel = 'OPTIMAL'; color = 'var(--vibrant-green)'; }
+
+                        // Update the temp units display (show both °F and °C).
+                        // Assumes incoming temperature is in Fahrenheit. If your data uses Celsius,
+                        // swap the conversion accordingly.
+                        const tempUnitsEl = document.getElementById('temp-units');
+                        if (tempUnitsEl) {
+                            const celsius = ((seriesValue - 32) * 5 / 9);
+                            // Show one decimal place for better readability
+                            tempUnitsEl.textContent = `${seriesValue.toFixed(1)}°F / ${celsius.toFixed(1)}°C`;
+                        }
                     } else { 
                         if (seriesValue < 40) { statusLabel = 'LOW'; color = 'var(--vibrant-red)'; }
                         else if (seriesValue < 60) { statusLabel = 'FAIR'; color = 'var(--vibrant-yellow)'; }
